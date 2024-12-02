@@ -79,5 +79,4 @@ python -m spacy download en_core_web_sm
 ├── finalProject.py         # Main application script
 ├── requirements.txt        # Python library dependencies
 ├── README.md               # Project documentation
-└── data/                   # (Optional) Pre-scraped or example datasets
 ```
