@@ -1,0 +1,7 @@
+streamlit
+spacy
+nltk
+tensorflow
+pymongo
+beautifulsoup4
+matplotlib
