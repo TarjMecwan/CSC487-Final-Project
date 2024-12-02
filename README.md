@@ -76,7 +76,8 @@ python -m spacy download en_core_web_sm
 ### Project Structure
 ```
 .
-├── finalProject.py         # Main application script
+├── CSC 487 - Final Project        # Main Project Folder
+   ├── finalProject.py         # Main application script
 ├── requirements.txt        # Python library dependencies
 ├── README.md               # Project documentation
 ```
