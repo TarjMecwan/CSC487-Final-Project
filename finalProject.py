@@ -22,7 +22,7 @@ client = MongoClient("mongodb://localhost:27017/")
 db = client['sentiment_analysis']
 collection = db['articles']
 
-# Load Hugging Face pre-trained classifier
+# Load Hugging Face pre-trained classifier for political bias
 bias_classifier = pipeline("text-classification", model="nlptown/bert-base-multilingual-uncased-sentiment")
 
 # Streamlit setup
@@ -70,30 +70,29 @@ def analyze_bias(text):
     score = result[0]['score']
     return {"label": label, "confidence": score}
 
-# Visualization
+# Visualization for political bias
 def visualize_bias(bias_result):
-    labels = ["Very Negative", "Negative", "Neutral", "Positive", "Very Positive"]
-    values = [0, 0, 0, 0, 0]
-    if bias_result["label"] == "1 star":
+    labels = ["Left", "Center", "Right"]
+    values = [0, 0, 0]
+    if bias_result["label"] == "Left":
         values[0] = bias_result["confidence"]
-    elif bias_result["label"] == "2 stars":
+    elif bias_result["label"] == "Center":
         values[1] = bias_result["confidence"]
-    elif bias_result["label"] == "3 stars":
+    elif bias_result["label"] == "Right":
         values[2] = bias_result["confidence"]
-    elif bias_result["label"] == "4 stars":
-        values[3] = bias_result["confidence"]
-    elif bias_result["label"] == "5 stars":
-        values[4] = bias_result["confidence"]
 
-    plt.bar(labels, values, color=["red", "orange", "gray", "lightgreen", "green"])
-    plt.xlabel("Bias Categories")
+    plt.figure(figsize=(6, 4))
+    plt.bar(labels, values, color=["blue", "gray", "red"])
+    plt.xlabel("Political Bias")
     plt.ylabel("Confidence")
     plt.title("Political Bias Analysis")
     st.pyplot(plt)
 
+# Visualization for sentiment analysis
 def visualize_sentiment(sentiment_scores):
     categories = list(sentiment_scores.keys())
     values = list(sentiment_scores.values())
+    plt.figure(figsize=(6, 4))
     plt.bar(categories, values)
     plt.xlabel('Sentiment Categories')
     plt.ylabel('Scores')
@@ -154,11 +153,11 @@ if st.checkbox("Show Historical Trends"):
     all_articles = list(collection.find())
     st.write(f"Number of Analyzed Articles: {len(all_articles)}")
     sentiment_trends = {"positive": 0, "neutral": 0, "negative": 0}
-    bias_trends = {"Very Negative": 0, "Negative": 0, "Neutral": 0, "Positive": 0, "Very Positive": 0}
+    bias_trends = {"Left": 0, "Center": 0, "Right": 0}
     
     for article in all_articles:
         sentiment = article['sentiment_scores']
-        bias = article.get('bias_result', {"label": "Neutral", "confidence": 0})
+        bias = article.get('bias_result', {"label": "Center", "confidence": 0})
         sentiment_trends["positive"] += sentiment['pos']
         sentiment_trends["neutral"] += sentiment['neu']
         sentiment_trends["negative"] += sentiment['neg']
@@ -166,6 +165,7 @@ if st.checkbox("Show Historical Trends"):
             bias_trends[bias['label']] += 1
     
     st.write("### Historical Sentiment Trends")
+    plt.figure(figsize=(6, 4))
     plt.bar(sentiment_trends.keys(), sentiment_trends.values())
     plt.title("Sentiment Trends")
     plt.xlabel("Sentiment Type")
@@ -173,7 +173,8 @@ if st.checkbox("Show Historical Trends"):
     st.pyplot(plt)
     
     st.write("### Historical Bias Trends")
-    plt.bar(bias_trends.keys(), bias_trends.values(), color=["red", "orange", "gray", "lightgreen", "green"])
+    plt.figure(figsize=(6, 4))
+    plt.bar(bias_trends.keys(), bias_trends.values(), color=["blue", "gray", "red"])
     plt.title("Political Bias Trends")
     plt.xlabel("Bias Type")
     plt.ylabel("Aggregate Count")
