@@ -3,8 +3,6 @@ import spacy
 import nltk
 from nltk.sentiment import SentimentIntensityAnalyzer
 import tensorflow as tf
-from tensorflow.keras.preprocessing.text import Tokenizer
-from tensorflow.keras.preprocessing.sequence import pad_sequences
 from pymongo import MongoClient
 import matplotlib.pyplot as plt
 import re
@@ -24,8 +22,14 @@ client = MongoClient("mongodb://localhost:27017/")
 db = client['sentiment_analysis']
 collection = db['articles']
 
+# Political Bias Dictionary (Example terms, expand as needed)
+bias_terms = {
+    "left": ["equity", "progressive", "inequality", "social justice", "climate change"],
+    "right": ["freedom", "patriotism", "tax cuts", "national security", "gun rights"]
+}
+
 # Streamlit setup
-st.title("Political and Current Events Article Sentiment Analyzer")
+st.title("Political and Current Events Article Analyzer")
 st.sidebar.title("Upload or Paste Article Text")
 
 # Preprocessing function
@@ -62,7 +66,23 @@ def analyze_sentiment_nltk(text):
     scores = sia.polarity_scores(text)
     return scores
 
+# Bias detection
+def detect_bias(text):
+    text = text.lower()
+    left_count = sum(text.count(term) for term in bias_terms["left"])
+    right_count = sum(text.count(term) for term in bias_terms["right"])
+    return {"left": left_count, "right": right_count}
+
 # Visualization
+def visualize_bias(bias_scores):
+    categories = list(bias_scores.keys())
+    values = list(bias_scores.values())
+    plt.bar(categories, values, color=["blue", "red"])
+    plt.xlabel('Bias Categories')
+    plt.ylabel('Count')
+    plt.title('Political Bias Analysis')
+    st.pyplot(plt)
+
 def visualize_sentiment(sentiment_scores):
     categories = list(sentiment_scores.keys())
     values = list(sentiment_scores.values())
@@ -100,18 +120,24 @@ if st.sidebar.button("Analyze"):
     if user_input:
         preprocessed_text = preprocess_text(user_input)
         sentiment_scores = analyze_sentiment_nltk(preprocessed_text)
+        bias_scores = detect_bias(preprocessed_text)
         
         # Save to MongoDB
         collection.insert_one({
             "original_text": user_input,
             "preprocessed_text": preprocessed_text,
-            "sentiment_scores": sentiment_scores
+            "sentiment_scores": sentiment_scores,
+            "bias_scores": bias_scores
         })
         
         # Display results
         st.write("### Sentiment Analysis Results")
         st.write(sentiment_scores)
         visualize_sentiment(sentiment_scores)
+
+        st.write("### Political Bias Analysis Results")
+        st.write(bias_scores)
+        visualize_bias(bias_scores)
     else:
         st.sidebar.error("Please provide text, a URL, or upload a PDF.")
 
@@ -120,15 +146,27 @@ if st.checkbox("Show Historical Trends"):
     all_articles = list(collection.find())
     st.write(f"Number of Analyzed Articles: {len(all_articles)}")
     sentiment_trends = {"positive": 0, "neutral": 0, "negative": 0}
+    bias_trends = {"left": 0, "right": 0}
     
     for article in all_articles:
         sentiment = article['sentiment_scores']
+        bias = article.get('bias_scores', {"left": 0, "right": 0})
         sentiment_trends["positive"] += sentiment['pos']
         sentiment_trends["neutral"] += sentiment['neu']
         sentiment_trends["negative"] += sentiment['neg']
+        bias_trends["left"] += bias['left']
+        bias_trends["right"] += bias['right']
     
+    st.write("### Historical Sentiment Trends")
     plt.bar(sentiment_trends.keys(), sentiment_trends.values())
-    plt.title("Historical Sentiment Trends")
+    plt.title("Sentiment Trends")
     plt.xlabel("Sentiment Type")
+    plt.ylabel("Aggregate Score")
+    st.pyplot(plt)
+    
+    st.write("### Historical Bias Trends")
+    plt.bar(bias_trends.keys(), bias_trends.values(), color=["blue", "red"])
+    plt.title("Political Bias Trends")
+    plt.xlabel("Bias Type")
     plt.ylabel("Aggregate Score")
     st.pyplot(plt)
