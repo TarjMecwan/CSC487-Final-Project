@@ -6,3 +6,4 @@ pymongo
 beautifulsoup4
 matplotlib
 PyPDF2
+transformers
