@@ -5,3 +5,4 @@ tensorflow
 pymongo
 beautifulsoup4
 matplotlib
+PyPDF2

@@ -10,9 +10,7 @@ import matplotlib.pyplot as plt
 import re
 from bs4 import BeautifulSoup
 import requests
-import os
 import PyPDF2
-from pathlib import Path
 
 # Load spaCy model
 nlp = spacy.load("en_core_web_sm")
@@ -51,15 +49,13 @@ def extract_text_from_pdf(file):
         text += page.extract_text()
     return text
 
-# Folder extraction function
-def extract_text_from_folder(folder):
-    text = ""
-    for file in os.listdir(folder):
-        if file.endswith(".pdf"):
-            file_path = os.path.join(folder, file)
-            with open(file_path, "rb") as pdf_file:
-                text += extract_text_from_pdf(pdf_file)
-    return text
+# Process multiple PDF files
+def process_uploaded_pdfs(files):
+    combined_text = ""
+    for file in files:
+        combined_text += extract_text_from_pdf(file)
+        combined_text += "\n"
+    return combined_text
 
 # Sentiment analysis using NLTK
 def analyze_sentiment_nltk(text):
@@ -77,7 +73,7 @@ def visualize_sentiment(sentiment_scores):
     st.pyplot(plt)
 
 # Input section
-input_type = st.sidebar.radio("Input Method", ["Paste Text", "URL", "Upload PDF", "Upload Folder of PDFs"])
+input_type = st.sidebar.radio("Input Method", ["Paste Text", "URL", "Upload PDF", "Upload Multiple PDFs"])
 
 if input_type == "Paste Text":
     user_input = st.sidebar.text_area("Paste your article here:")
@@ -93,14 +89,12 @@ elif input_type == "Upload PDF":
         user_input = extract_text_from_pdf(uploaded_pdf)
         st.sidebar.write("Extracted Text:")
         st.sidebar.write(user_input)
-elif input_type == "Upload Folder of PDFs":
-    folder_path = st.sidebar.text_input("Enter the folder path containing PDFs:")
-    if folder_path and Path(folder_path).exists():
-        user_input = extract_text_from_folder(folder_path)
-        st.sidebar.write("Extracted Text:")
+elif input_type == "Upload Multiple PDFs":
+    uploaded_pdfs = st.sidebar.file_uploader("Upload Multiple PDFs", type="pdf", accept_multiple_files=True)
+    if uploaded_pdfs:
+        user_input = process_uploaded_pdfs(uploaded_pdfs)
+        st.sidebar.write("Extracted Text from Uploaded PDFs:")
         st.sidebar.write(user_input)
-    else:
-        st.sidebar.error("Folder not found. Please check the path.")
 
 if st.sidebar.button("Analyze"):
     if user_input:
