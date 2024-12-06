@@ -9,6 +9,9 @@ from transformers import pipeline
 import PyPDF2
 import requests
 from bs4 import BeautifulSoup
+from pydub import AudioSegment
+import os
+import numpy as np
 
 # Load spaCy model
 nlp = spacy.load("en_core_web_sm")
@@ -22,12 +25,14 @@ client = MongoClient("mongodb://localhost:27017/")
 db = client['sentiment_analysis']
 collection = db['articles']
 
-# Load Hugging Face pre-trained classifier for political bias
+# Hugging Face models
 bias_classifier = pipeline("text-classification", model="nlptown/bert-base-multilingual-uncased-sentiment")
+summarizer = pipeline("summarization", model="facebook/bart-large-cnn")
+emotion_model = pipeline("text-classification", model="j-hartmann/emotion-english-distilroberta-base", return_all_scores=True)
 
 # Streamlit setup
-st.title("Political and Current Events Article Analyzer")
-st.sidebar.title("Upload or Paste Article Text")
+st.title("Comprehensive Article Analyzer")
+st.sidebar.title("Upload or Paste Content")
 
 # Preprocessing function
 def preprocess_text(text):
@@ -50,45 +55,83 @@ def extract_text_from_pdf(file):
         text += page.extract_text()
     return text
 
-# Process multiple PDF files
-def process_uploaded_pdfs(files):
-    combined_text = ""
-    for file in files:
-        combined_text += extract_text_from_pdf(file)
-        combined_text += "\n"
-    return combined_text
+# MP3 extraction function
+def extract_text_from_mp3(file):
+    temp_mp3 = "temp.mp3"
+    with open(temp_mp3, "wb") as f:
+        f.write(file.read())
+    audio = AudioSegment.from_file(temp_mp3)
+    audio.export("temp.wav", format="wav")
+    os.remove(temp_mp3)
+
+    import whisper
+    model = whisper.load_model("base")
+    result = model.transcribe("temp.wav")
+    os.remove("temp.wav")
+    return result["text"]
+
+# Summarization function
+def summarize_text(text):
+    summary = summarizer(text, max_length=130, min_length=30, do_sample=False)
+    return summary[0]["summary_text"]
 
 # Sentiment analysis using NLTK
 def analyze_sentiment_nltk(text):
     scores = sia.polarity_scores(text)
     return scores
 
-# Political bias analysis
+# Political bias analysis (updated)
 def analyze_bias(text):
     result = bias_classifier(text[:512])  # Limit to 512 characters for processing
     label = result[0]['label']
     score = result[0]['score']
-    return {"label": label, "confidence": score}
+    
+    # Consider 'Center' as not biased, everything else as biased
+    if label == "Center":
+        return {"bias": "Not Biased", "confidence": score}
+    else:
+        return {"bias": "Biased", "confidence": score}
 
-# Visualization for political bias
+# Emotion analysis
+def analyze_emotions(text):
+    emotion_scores = emotion_model(text[:512])  # Limit to 512 characters for processing
+    scores = {item["label"]: item["score"] for item in emotion_scores[0]}
+    return scores
+
+# Visualization for emotions (Radar Chart)
+def visualize_emotions(emotion_scores):
+    labels = list(emotion_scores.keys())
+    values = list(emotion_scores.values())
+    values += values[:1]  # Close the radar chart loop
+
+    angles = np.linspace(0, 2 * np.pi, len(labels) + 1, endpoint=True)
+    fig, ax = plt.subplots(figsize=(6, 6), subplot_kw=dict(polar=True))
+    ax.fill(angles, values, color='blue', alpha=0.25)
+    ax.plot(angles, values, color='blue', linewidth=2)
+    ax.set_yticks([])
+    ax.set_xticks(angles[:-1])
+    ax.set_xticklabels(labels)
+    ax.set_title("Emotion Analysis Radar Chart")
+    st.pyplot(fig)
+
+# Visualization for political bias (updated)
 def visualize_bias(bias_result):
-    labels = ["Left", "Center", "Right"]
-    values = [0, 0, 0]
-    if bias_result["label"] == "Left":
+    labels = ["Not Biased", "Biased"]
+    values = [0, 0]
+    
+    if bias_result["bias"] == "Not Biased":
         values[0] = bias_result["confidence"]
-    elif bias_result["label"] == "Center":
+    else:
         values[1] = bias_result["confidence"]
-    elif bias_result["label"] == "Right":
-        values[2] = bias_result["confidence"]
 
     plt.figure(figsize=(6, 4))
-    plt.bar(labels, values, color=["blue", "gray", "red"])
-    plt.xlabel("Political Bias")
+    plt.bar(labels, values, color=["green", "orange"])
+    plt.xlabel("Bias Category")
     plt.ylabel("Confidence")
-    plt.title("Political Bias Analysis")
+    plt.title("Bias Analysis")
     st.pyplot(plt)
 
-# Visualization for sentiment analysis
+# Visualization for sentiment analysis (Bar Chart)
 def visualize_sentiment(sentiment_scores):
     categories = list(sentiment_scores.keys())
     values = list(sentiment_scores.values())
@@ -100,7 +143,7 @@ def visualize_sentiment(sentiment_scores):
     st.pyplot(plt)
 
 # Input section
-input_type = st.sidebar.radio("Input Method", ["Paste Text", "URL", "Upload PDF", "Upload Multiple PDFs"])
+input_type = st.sidebar.radio("Input Method", ["Paste Text", "URL", "Upload PDF", "Upload MP3", "Upload Multiple PDFs"])
 
 if input_type == "Paste Text":
     user_input = st.sidebar.text_area("Paste your article here:")
@@ -116,10 +159,16 @@ elif input_type == "Upload PDF":
         user_input = extract_text_from_pdf(uploaded_pdf)
         st.sidebar.write("Extracted Text:")
         st.sidebar.write(user_input)
+elif input_type == "Upload MP3":
+    uploaded_mp3 = st.sidebar.file_uploader("Upload an MP3", type="mp3")
+    if uploaded_mp3:
+        user_input = extract_text_from_mp3(uploaded_mp3)
+        st.sidebar.write("Transcribed Text:")
+        st.sidebar.write(user_input)
 elif input_type == "Upload Multiple PDFs":
     uploaded_pdfs = st.sidebar.file_uploader("Upload Multiple PDFs", type="pdf", accept_multiple_files=True)
     if uploaded_pdfs:
-        user_input = process_uploaded_pdfs(uploaded_pdfs)
+        user_input = "\n".join([extract_text_from_pdf(pdf) for pdf in uploaded_pdfs])
         st.sidebar.write("Extracted Text from Uploaded PDFs:")
         st.sidebar.write(user_input)
 
@@ -128,54 +177,33 @@ if st.sidebar.button("Analyze"):
         preprocessed_text = preprocess_text(user_input)
         sentiment_scores = analyze_sentiment_nltk(preprocessed_text)
         bias_result = analyze_bias(preprocessed_text)
-        
+        emotion_scores = analyze_emotions(preprocessed_text)
+        summary = summarize_text(preprocessed_text)
+
         # Save to MongoDB
         collection.insert_one({
             "original_text": user_input,
             "preprocessed_text": preprocessed_text,
             "sentiment_scores": sentiment_scores,
-            "bias_result": bias_result
+            "bias_result": bias_result,
+            "emotion_scores": emotion_scores,
+            "summary": summary,
         })
-        
+
         # Display results
         st.write("### Sentiment Analysis Results")
         st.write(sentiment_scores)
         visualize_sentiment(sentiment_scores)
 
-        st.write("### Political Bias Analysis Results")
-        st.write(f"Bias: {bias_result['label']} with {bias_result['confidence']:.2f} confidence")
+        st.write("### Bias Analysis Results")
+        st.write(f"Bias: {bias_result['bias']} with {bias_result['confidence']:.2f} confidence")
         visualize_bias(bias_result)
-    else:
-        st.sidebar.error("Please provide text, a URL, or upload a PDF.")
 
-# Show historical trends
-if st.checkbox("Show Historical Trends"):
-    all_articles = list(collection.find())
-    st.write(f"Number of Analyzed Articles: {len(all_articles)}")
-    sentiment_trends = {"positive": 0, "neutral": 0, "negative": 0}
-    bias_trends = {"Left": 0, "Center": 0, "Right": 0}
-    
-    for article in all_articles:
-        sentiment = article['sentiment_scores']
-        bias = article.get('bias_result', {"label": "Center", "confidence": 0})
-        sentiment_trends["positive"] += sentiment['pos']
-        sentiment_trends["neutral"] += sentiment['neu']
-        sentiment_trends["negative"] += sentiment['neg']
-        if bias['label'] in bias_trends:
-            bias_trends[bias['label']] += 1
-    
-    st.write("### Historical Sentiment Trends")
-    plt.figure(figsize=(6, 4))
-    plt.bar(sentiment_trends.keys(), sentiment_trends.values())
-    plt.title("Sentiment Trends")
-    plt.xlabel("Sentiment Type")
-    plt.ylabel("Aggregate Score")
-    st.pyplot(plt)
-    
-    st.write("### Historical Bias Trends")
-    plt.figure(figsize=(6, 4))
-    plt.bar(bias_trends.keys(), bias_trends.values(), color=["blue", "gray", "red"])
-    plt.title("Political Bias Trends")
-    plt.xlabel("Bias Type")
-    plt.ylabel("Aggregate Count")
-    st.pyplot(plt)
+        st.write("### Emotion Analysis Results")
+        st.write(emotion_scores)
+        visualize_emotions(emotion_scores)
+
+        st.write("### Summary")
+        st.write(summary)
+    else:
+        st.sidebar.error("Please provide text, a URL, or upload a file.")
