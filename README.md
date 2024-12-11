@@ -39,7 +39,7 @@ python -m spacy download en_core_web_sm
 ### How to Run
 1. Clone the repository:
    ```
-   git clone https://github.com/your-username/your-repo-name.git
+   git clone https://github.com/TarjMecwan/CSC487-Final-Project.git
    ```
 
 2. Navigate to the project directory:
@@ -68,16 +68,22 @@ python -m spacy download en_core_web_sm
 #### Input Options
 * **Paste Text**: Manually paste article text into the input box for analysis.
 * **URL Input**: Provide a URL to fetch and analyze the article content.
+* **PDF Upload**: Upload a single PDF file containing the text you want to analyze.
+* **Multiple PDF Uploads**: Upload multiple PDF files for batch analysis of their content.
+* **MP3 Upload**: Upload an MP3 audio file, which will be transcribed and analyzed for sentiment, emotion, and intent.
 
 #### Output
-* Sentiment scores are displayed as a bar chart.
-* The analysis is saved to MongoDB for historical trend tracking.
+* **Sentiment Analysis**: Identifies the emotional tone (positive, neutral, negative) of the content.
+* **Emotion Mapping**: Generates a radar chart to visualize emotions such as sadness, anger, joy, etc., present in the content.
+* **Bias Detection**: Determines whether the content exhibits potential bias.
+* **Intent Analysis**: Predicts the intent of the content (e.g., informative, persuasive, entertaining).
+* **Summary Generation**: Provides a concise, human-readable summary of the analyzed content.
+* **Sentiment Heatmap**: Visualizes the intensity of sentiment across different segments of the text.
 
 ### Project Structure
 ```
 .
-├── CSC 487 - Final Project        # Main Project Folder
-   ├── finalProject.py         # Main application script
+├── finalProject.py         # Main application script
 ├── requirements.txt        # Python library dependencies
 ├── README.md               # Project documentation
 ```
